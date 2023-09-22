@@ -1,5 +1,5 @@
 project:
-  name: quickstart-trendmicro-deepsecurity
+  name: cfn-ps-trendmicro-deepsecurity
   owner: quickstart@amazon.com
   package_lambda: false
   regions:
