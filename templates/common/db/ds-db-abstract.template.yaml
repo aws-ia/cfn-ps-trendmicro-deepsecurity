@@ -1,0 +1,397 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: 'v5.68: This template is an abstraction layer for choosing PostgreSQL, Oracle or MSSQL when deploying Deep Security Manager. (qs-1ngr590i4)'
+Metadata:
+  cfn-lint:
+    config:
+      ignore_checks:
+        - W2001
+        - W8001
+        - E9010
+      ignore_reasons: W2001:'Parameters are referenced by other template' W8001:'Conditions are referenced by other template' E9010:'Definition is used by another template'
+Parameters:
+  AWSIKeyPairName:
+    Description: Existing key pair to use for connecting to database if using Postgres on Docker Instance
+    Type: AWS::EC2::KeyPair::KeyName
+    ConstraintDescription: Select an existing EC2 Key Pair.
+  DBIRDSInstanceSize:
+    Default: db.m5.large
+    Description: Trend Micro Deep Security Database instance class
+    Type: String
+    AllowedValues:
+      - db.m5.large
+      - db.m5.xlarge
+      - db.m5.2xlarge
+      - db.m5.4xlarge
+      - db.m5.8xlarge
+      - db.r5.large
+      - db.r5.xlarge
+      - db.r5.2xlarge
+      - db.r5.4xlarge
+      - db.r5.8xlarge
+    ConstraintDescription: must select a valid database instance type.
+  DBIStorageAllocation:
+    Default: 20
+    Description: The Storage Allocated to Database Instance (in GB). Minimum 200 for SQL Server, 20 for Oracle.
+    Type: Number
+    MinValue: 20
+    MaxValue: 3072
+    ConstraintDescription: must be between 20 and 3072Gb.
+  DBPBackupDays:
+    Default: 1
+    Description: Days to keep automatic RDS backups (0-35)
+    Type: Number
+    MinValue: 0
+    MaxValue: 35
+    ConstraintDescription: must be between 0 and 35 days.
+  DBICAdminName:
+    Default: dsadmin
+    Description: Admin account username to be used for the database instance
+    Type: String
+    MinLength: 1
+    MaxLength: 16
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+    ConstraintDescription: must begin with a letter and contain only alphanumeric characters.
+  DBICAdminPassword:
+    NoEcho: true
+    Description: Password to be used for the database admin account. 8-41 alphanumeric characters
+    Type: String
+    MinLength: 8
+    MaxLength: 41
+    AllowedPattern: '[a-zA-Z0-9!^*\-_+]*'
+    ConstraintDescription: Can only contain alphanumeric characters or the following special characters !^*-_+ Min length 8, max length 41
+  DBPName:
+    Default: dsm
+    Description: Name to be assigned to the database
+    Type: String
+    MinLength: 1
+    MaxLength: 64
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+    ConstraintDescription: must begin with a letter and contain only alphanumeric characters.
+  StorageType:
+    Default: gp2
+    Type: String
+  RDSSG:
+    Type: AWS::EC2::SecurityGroup::Id
+  DBPEngine:
+    Description: Choose PostgreSQL, MSSSQL, Oracle or Aurora PostgreSQL for DSM database Engine
+    Type: String
+    Default: PostgreSQL
+    AllowedValues:
+      - SQL
+      - Oracle
+      - PostgreSQL
+      - PostgresDocker
+      - AuroraPostgreSQL
+  MultiAZ:
+    Description: Use Multi-AZ or SQL Mirroring Option Group for RDS Instance
+    Type: String
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Default: 'false'
+  DBISubnetGroupName:
+    Type: String
+    Default: ''
+  DBISubnet1:
+    Description: Choose a private subnets in the same VPC for the RDS instance
+    Type: AWS::EC2::Subnet::Id
+    ConstraintDescription: RDS Subnet Groups must be comprised of 2 subnets in separate availability zones with the specified VPC for deploying this template
+  DBISubnet2:
+    Description: Choose private subnets in the same VPC for this RDS instance
+    Type: AWS::EC2::Subnet::Id
+    ConstraintDescription: RDS Subnet Groups must be comprised of 2 subnets in separate availability zones with the specified VPC for deploying this template
+  QSS3BucketName:
+    AllowedPattern: ^[0-9a-zA-Z]+([0-9a-zA-Z-]*[0-9a-zA-Z])*$
+    ConstraintDescription: Quick Start bucket name can include numbers, lowercase letters, uppercase letters, and hyphens (-). It cannot start or end with a hyphen (-).
+    Default: aws-quickstart
+    Description: S3 bucket name for the Quick Start assets. Quick Start bucket name can include numbers, lowercase letters, uppercase letters, and hyphens (-). It cannot start or end with a hyphen (-).
+    Type: String
+  QSS3BucketRegion:
+    Default: us-east-1
+    Description: The AWS Region where the Quick Start S3 bucket (QSS3BucketName) is hosted. When using your own bucket, you must specify this value.
+    Type: String
+  QSS3KeyPrefix:
+    AllowedPattern: ^[0-9a-zA-Z-/]*$
+    ConstraintDescription: Quick Start key prefix can include numbers, lowercase letters, uppercase letters, hyphens (-), and forward slash (/).
+    Default: quickstart-trendmicro-deepsecurity/
+    Description: S3 key prefix for the Quick Start assets. Quick Start key prefix can include numbers, lowercase letters, uppercase letters, hyphens (-), and forward slash (/).
+    Type: String
+Resources:
+  DSOracleRDS:
+    Type: AWS::CloudFormation::Stack
+    Condition: DBTypeIsOracle
+    Properties:
+      TemplateURL:
+        Fn::Sub:
+          - https://${S3Bucket}.s3.${S3Region}.${AWS::URLSuffix}/${QSS3KeyPrefix}templates/common/db/ds-db-oracle-rds.template.yaml
+          - S3Region:
+              Fn::If:
+                - UsingDefaultBucket
+                - Ref: AWS::Region
+                - Ref: QSS3BucketRegion
+            S3Bucket:
+              Fn::If:
+                - UsingDefaultBucket
+                - Fn::Sub: ${QSS3BucketName}-${AWS::Region}
+                - Ref: QSS3BucketName
+      TimeoutInMinutes: 120
+      Parameters:
+        DBIRDSInstanceSize:
+          Ref: DBIRDSInstanceSize
+        DBIStorageAllocation:
+          Ref: DBIStorageAllocation
+        DBPBackupDays:
+          Ref: DBPBackupDays
+        DBICAdminName:
+          Ref: DBICAdminName
+        DBICAdminPassword:
+          Ref: DBICAdminPassword
+        DBPName:
+          Ref: DBPName
+        RDSSG:
+          Ref: RDSSG
+        DBISubnetGroupName:
+          Ref: DBISubnetGroup
+        MultiAZ:
+          Ref: MultiAZ
+  DSSQLRDS:
+    Type: AWS::CloudFormation::Stack
+    Condition: DBTypeIsSQL
+    Properties:
+      TemplateURL:
+        Fn::Sub:
+          - https://${S3Bucket}.s3.${S3Region}.${AWS::URLSuffix}/${QSS3KeyPrefix}templates/common/db/ds-db-mssql-rds.template.yaml
+          - S3Region:
+              Fn::If:
+                - UsingDefaultBucket
+                - Ref: AWS::Region
+                - Ref: QSS3BucketRegion
+            S3Bucket:
+              Fn::If:
+                - UsingDefaultBucket
+                - Fn::Sub: ${QSS3BucketName}-${AWS::Region}
+                - Ref: QSS3BucketName
+      TimeoutInMinutes: 120
+      Parameters:
+        DBIRDSInstanceSize:
+          Ref: DBIRDSInstanceSize
+        DBIStorageAllocation:
+          Ref: DBIStorageAllocation
+        DBPBackupDays:
+          Ref: DBPBackupDays
+        DBICAdminName:
+          Ref: DBICAdminName
+        DBICAdminPassword:
+          Ref: DBICAdminPassword
+        DBPName:
+          Ref: DBPName
+        RDSSG:
+          Ref: RDSSG
+        DBISubnetGroupName:
+          Ref: DBISubnetGroup
+        MultiAZ:
+          Ref: MultiAZ
+  DSPostgreSQLRDS:
+    Type: AWS::CloudFormation::Stack
+    Condition: DBTypeIsPostgreSQL
+    Properties:
+      TemplateURL:
+        Fn::Sub:
+          - https://${S3Bucket}.s3.${S3Region}.${AWS::URLSuffix}/${QSS3KeyPrefix}templates/common/db/ds-db-postgresql-rds.template.yaml
+          - S3Region:
+              Fn::If:
+                - UsingDefaultBucket
+                - Ref: AWS::Region
+                - Ref: QSS3BucketRegion
+            S3Bucket:
+              Fn::If:
+                - UsingDefaultBucket
+                - Fn::Sub: ${QSS3BucketName}-${AWS::Region}
+                - Ref: QSS3BucketName
+      TimeoutInMinutes: 120
+      Parameters:
+        DBIRDSInstanceSize:
+          Ref: DBIRDSInstanceSize
+        DBIStorageAllocation:
+          Ref: DBIStorageAllocation
+        DBPBackupDays:
+          Ref: DBPBackupDays
+        DBICAdminName:
+          Ref: DBICAdminName
+        DBICAdminPassword:
+          Ref: DBICAdminPassword
+        DBPName:
+          Ref: DBPName
+        RDSSG:
+          Ref: RDSSG
+        DBISubnetGroupName:
+          Ref: DBISubnetGroup
+        MultiAZ:
+          Ref: MultiAZ
+  DSAuroraPostgreSQLRDS:
+    Type: AWS::CloudFormation::Stack
+    Condition: DBTypeIsAuroraPostgreSQL
+    Properties:
+      TemplateURL:
+        Fn::Sub:
+          - https://${S3Bucket}.s3.${S3Region}.${AWS::URLSuffix}/${QSS3KeyPrefix}templates/common/db/ds-db-postgresql-rds-aurora.template.yaml
+          - S3Region:
+              Fn::If:
+                - UsingDefaultBucket
+                - Ref: AWS::Region
+                - Ref: QSS3BucketRegion
+            S3Bucket:
+              Fn::If:
+                - UsingDefaultBucket
+                - Fn::Sub: ${QSS3BucketName}-${AWS::Region}
+                - Ref: QSS3BucketName
+      TimeoutInMinutes: 65
+      Parameters:
+        DBIRDSInstanceSize:
+          Ref: DBIRDSInstanceSize
+        DBPBackupDays:
+          Ref: DBPBackupDays
+        DBICAdminName:
+          Ref: DBICAdminName
+        DBICAdminPassword:
+          Ref: DBICAdminPassword
+        DBPName:
+          Ref: DBPName
+        RDSSG:
+          Ref: RDSSG
+        DBISubnetGroupName:
+          Ref: DBISubnetGroup
+  DBISubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: DeepSecurityRDSSubnetGroup
+      SubnetIds:
+        - Ref: DBISubnet1
+        - Ref: DBISubnet2
+  DSPostgreSQLDocker:
+    Type: AWS::CloudFormation::Stack
+    Condition: DBTypeIsPostgreSQLDocker
+    Properties:
+      TemplateURL:
+        Fn::Sub:
+          - https://${S3Bucket}.s3.${S3Region}.${AWS::URLSuffix}/${QSS3KeyPrefix}templates/common/db/ds-db-postgresql-docker.template.yaml
+          - S3Region:
+              Fn::If:
+                - UsingDefaultBucket
+                - Ref: AWS::Region
+                - Ref: QSS3BucketRegion
+            S3Bucket:
+              Fn::If:
+                - UsingDefaultBucket
+                - Fn::Sub: ${QSS3BucketName}-${AWS::Region}
+                - Ref: QSS3BucketName
+      TimeoutInMinutes: 15
+      Parameters:
+        AWSIKeyPairName:
+          Ref: AWSIKeyPairName
+        DBICAdminName:
+          Ref: DBICAdminName
+        DBICAdminPassword:
+          Ref: DBICAdminPassword
+        DBPName:
+          Ref: DBPName
+        RDSSG:
+          Ref: RDSSG
+        DBISubnet:
+          Ref: DBISubnet1
+Conditions:
+  DBTypeIsOracle:
+    Fn::Equals:
+      - Ref: DBPEngine
+      - Oracle
+  DBTypeIsSQL:
+    Fn::Equals:
+      - Ref: DBPEngine
+      - SQL
+  DBTypeIsPostgreSQL:
+    Fn::Equals:
+      - Ref: DBPEngine
+      - PostgreSQL
+  DBTypeIsPostgreSQLDocker:
+    Fn::Equals:
+      - Ref: DBPEngine
+      - PostgresDocker
+  DBTypeIsAuroraPostgreSQL:
+    Fn::Equals:
+      - Ref: DBPEngine
+      - AuroraPostgreSQL
+  GovCloudCondition:
+    Fn::Or:
+      - Fn::Equals:
+          - Ref: AWS::Region
+          - us-gov-west-1
+      - Fn::Equals:
+          - Ref: AWS::Region
+          - us-gov-east-1
+  UsingDefaultBucket:
+    Fn::Equals:
+      - Ref: QSS3BucketName
+      - aws-quickstart
+Outputs:
+  DSDBEndpoint:
+    Value:
+      Fn::If:
+        - DBTypeIsOracle
+        - Fn::GetAtt:
+            - DSOracleRDS
+            - Outputs.DSDBEndpoint
+        - Fn::If:
+            - DBTypeIsPostgreSQL
+            - Fn::GetAtt:
+                - DSPostgreSQLRDS
+                - Outputs.DSDBEndpoint
+            - Fn::If:
+                - DBTypeIsPostgreSQLDocker
+                - Fn::GetAtt:
+                    - DSPostgreSQLDocker
+                    - Outputs.DSDBEndpoint
+                - Fn::If:
+                    - DBTypeIsSQL
+                    - Fn::GetAtt:
+                        - DSSQLRDS
+                        - Outputs.DSDBEndpoint
+                    - Fn::If:
+                        - DBTypeIsAuroraPostgreSQL
+                        - Fn::GetAtt:
+                            - DSAuroraPostgreSQLRDS
+                            - Outputs.DSDBEndpoint
+                        - ''
+  DSDBPort:
+    Value:
+      Fn::If:
+        - DBTypeIsOracle
+        - Fn::GetAtt:
+            - DSOracleRDS
+            - Outputs.DSDBPort
+        - Fn::If:
+            - DBTypeIsPostgreSQL
+            - Fn::GetAtt:
+                - DSPostgreSQLRDS
+                - Outputs.DSDBPort
+            - Fn::If:
+                - DBTypeIsPostgreSQLDocker
+                - Fn::GetAtt:
+                    - DSPostgreSQLDocker
+                    - Outputs.DSDBPort
+                - Fn::If:
+                    - DBTypeIsSQL
+                    - Fn::GetAtt:
+                        - DSSQLRDS
+                        - Outputs.DSDBPort
+                    - Fn::If:
+                        - DBTypeIsAuroraPostgreSQL
+                        - Fn::GetAtt:
+                            - DSAuroraPostgreSQLRDS
+                            - Outputs.DSDBPort
+                        - ''
+  StorageType:
+    Value:
+      Ref: StorageType
+  DBISubnetGroupName:
+    Value:
+      Ref: DBISubnetGroupName
