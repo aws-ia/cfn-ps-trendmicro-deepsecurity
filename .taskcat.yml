@@ -27,7 +27,7 @@ tests:
     parameters:
       AvailabilityZones: $[taskcat_genaz_3]
       DeepSecurityAdminPass: $[taskcat_genpass_8A]
-      KeyPairName: override
+      KeyPairName: $[taskcat_getkeypair]
       ProtectedInstances: 1-100
       QSS3BucketName: $[taskcat_autobucket]
       QSS3BucketRegion: $[taskcat_current_region]
