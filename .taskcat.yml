@@ -29,6 +29,7 @@ tests:
       DeepSecurityAdminPass: $[taskcat_genpass_8A]
       KeyPairName: $[taskcat_getkeypair]
       ProtectedInstances: 1-100
+      QSS3KeyPrefix: cfn-ps-trendmicro-deepsecurity/
       QSS3BucketName: $[taskcat_autobucket]
       QSS3BucketRegion: $[taskcat_current_region]
     regions:
